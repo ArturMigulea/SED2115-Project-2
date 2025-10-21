@@ -1,7 +1,7 @@
 function Main_Tab() {
   return (
     <div>
-      <h1 className='title'>Goals</h1>
+      <h1 className='title'>Main Tab</h1>
     </div>
   );
 }
