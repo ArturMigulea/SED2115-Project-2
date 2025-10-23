@@ -1,7 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { teams } from "../../data/teams.js";
-import { players } from "../../data/players.js"; // <--- добавляем
 import styles from "./TeamTemplate.module.css";
 
 export default function TeamTemplate() {
