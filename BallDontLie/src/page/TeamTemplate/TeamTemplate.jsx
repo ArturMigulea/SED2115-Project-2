@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { teams } from "../../data/teams.js";
 import styles from "./TeamTemplate.module.css";
+import { getTeamById, searchPlayersByName } from "../../api/nbaClient";
 
 export default function TeamTemplate() {
   const { id } = useParams();
@@ -11,20 +11,39 @@ export default function TeamTemplate() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSearchClosing, setIsSearchClosing] = useState(false);
 
-  const team = teams.find(t => t.id === Number(id));
+  const [team, setTeam] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
-  function handleSearch() {
+  // Call API client handler to get information
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setErr("");
+      try {
+        const t = await getTeamById(Number(id));
+        setTeam(t || null);
+      } catch (e) {
+        setErr(e?.message || "Failed to load team");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
+
+  async function handleSearch() {
     if (!search.trim()) return alert("Type NBA Player");
-
-    const term = search.toLowerCase();
-    const player = players.find(p => p.name.toLowerCase().includes(term));
-
-    if (player) {
-      navigate(`/player/${player.id}`);
-      return;
+    try {
+      const results = await searchPlayersByName(search.trim(), new Date().getFullYear() - 1);
+      const player = results?.[0];
+      if (player?.id) {
+        navigate(`/player/${player.id}`);
+        return;
+      }
+      alert("Not found. Try again.");
+    } catch {
+      alert("Search failed. Try again.");
     }
-
-    alert("Not found. Try again.");
   }
 
   function closeSearchOverlay() {
@@ -41,14 +60,18 @@ export default function TeamTemplate() {
     }
   }
 
-  // Close overlay on Escape
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === "Escape" && isSearchOpen) closeSearchOverlay();
+      if (e.key === "Enter" && isSearchOpen) handleSearch();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isSearchOpen]);
+  }, [isSearchOpen, search]);
+
+  const city = team?.city || team?.name || "—";
+  const conference = team?.leagues?.standard?.conference || team?.conference || "—";
+  const division = team?.leagues?.standard?.division || team?.division || "—";
 
   return (
     <div className={styles.body}>
@@ -83,52 +106,53 @@ export default function TeamTemplate() {
             <tbody>
               <tr>
                 <td colSpan="2" className={styles.teamName}>
-                  {team.full_name}
+                  {loading ? "Loading…" : (team?.name || team?.full_name || "Team")}
                 </td>
               </tr>
 
               <tr>
                 <td colSpan="2" className={styles.teamPhotoCell}>
-                  <img src={team.logo} className={styles.teamPhoto} alt={team.name} />
+                  {err && <p>{err}</p>}
+                  {!err && (
+                    <img
+                      src={team?.logo || "/placeholder-team.png"}
+                      className={styles.teamPhoto}
+                      alt={team?.name || "Team"}
+                    />
+                  )}
                 </td>
               </tr>
 
-              <tr><td>City:</td><td>{team.city}</td></tr>
-              <tr><td>Conference:</td><td>{team.conference}</td></tr>
-              <tr><td>Division:</td><td>{team.division}</td></tr>
-              <tr><td>Founded:</td><td>{team.founded}</td></tr>
-              <tr><td>Arena:</td><td>{team.arena}</td></tr>
-              <tr><td>Head Coach:</td><td>{team.coach}</td></tr>
-              <tr><td>Owner:</td><td>{team.owner}</td></tr>
-              <tr><td>Championships:</td><td>{team.championships}</td></tr>
+              <tr><td>City:</td><td>{city}</td></tr>
+              <tr><td>Conference:</td><td>{conference}</td></tr>
+              <tr><td>Division:</td><td>{division}</td></tr>
+              <tr><td>Founded:</td><td>—</td></tr>
+              <tr><td>Arena:</td><td>—</td></tr>
+              <tr><td>Head Coach:</td><td>—</td></tr>
+              <tr><td>Owner:</td><td>—</td></tr>
+              <tr><td>Championships:</td><td>—</td></tr>
             </tbody>
           </table>
         </section>
-
       </div>
 
-
-
-
-      {/* Search overlay */}
-      {
-        (isSearchOpen || isSearchClosing) && (
-          <div
-            className={`${styles.overlay} ${isSearchClosing ? styles.close : ""}`}
-            onClick={handleOverlayClick}
-          >
-            <div className={`${styles.searchBox} ${isSearchClosing ? styles.close : ""}`}>
-              <input
-                type="text"
-                placeholder="Search player..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                autoFocus
-              />
-            </div>
+      {(isSearchOpen || isSearchClosing) && (
+        <div
+          className={`${styles.overlay} ${isSearchClosing ? styles.close : ""}`}
+          onClick={handleOverlayClick}
+        >
+          <div className={`${styles.searchBox} ${isSearchClosing ? styles.close : ""}`}>
+            <input
+              type="text"
+              placeholder="Search player..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoFocus
+              onKeyDown={e => e.key === "Enter" && handleSearch()}
+            />
           </div>
-        )
-      }
-    </div >
+        </div>
+      )}
+    </div>
   );
 }
