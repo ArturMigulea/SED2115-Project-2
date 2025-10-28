@@ -1,7 +1,7 @@
 import styles from "./PlayersPage.module.css";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
-import { searchPlayersByName, getTopPlayersBySeason  } from "../../api/nbaClient";
+import { getTeams, searchPlayersByName, getTopPlayersBySeason } from "../../api/nbaClient";
 
 export default function PlayersPage() {
   const navigate = useNavigate();
@@ -13,42 +13,74 @@ export default function PlayersPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // Call API client handler to get information
+  const topPlayers = useMemo(() => playersPage.slice(0, 15), [playersPage]);
+
+  // ---------- TEAMS ----------
+  const [teamsData, setTeamsData] = useState([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
+  const [errorTeams, setErrorTeams] = useState("");
+
+  // Random 10 cards (stable until teamsData changes)
+  const topTeam = useMemo(() => {
+    const arr = [...teamsData];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr.slice(0, 10);
+  }, [teamsData]);
+
+  // Call API client handler to get teams
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setErr("");
+      setLoadingTeams(true);
+      setErrorTeams("");
       try {
-        // << Pull the actual best 15 by season. FREE VERSION only allows for year 2021 -> 2023
-        const season = 2023;
-        const res = await getTopPlayersBySeason({ season, limit: 15, metric: "pts" }); // or "eff"
-        setPlayersPage(res || []);
-      } catch (e) {
-        console.error(e);
-        setErr(e?.message || "Failed to load players");
+        const teams = await getTeams(); // all teams
+        setTeamsData(teams || []);
+      } catch (err) {
+        setErrorTeams(err?.message || "Failed to load teams");
       } finally {
-        setLoading(false);
+        setLoadingTeams(false);
       }
     })();
   }, []);
 
-  const topPlayers = useMemo(() => playersPage.slice(0, 15), [playersPage]);
-
   async function handleSearch() {
-    if (!search.trim()) return alert("Type NBA Player");
+    const query = search.trim().toLowerCase();
+    if (!query) return alert("Type NBA Player or Team");
+
+    // 1) Search Teams
+    const matchedTeams = teamsData.filter(t =>
+      (t.name?.toLowerCase().includes(query)) ||
+      (t.full_name?.toLowerCase().includes(query)) ||
+      (t.shortName?.toLowerCase() === query)
+    );
+
+    if (matchedTeams.length === 1) {
+      navigate(`/team/${matchedTeams[0].id}`);
+      return;
+    } else if (matchedTeams.length > 1) {
+      return alert("Multiple teams matched. Please enter full team name");
+    }
+
+    // 2) Search Players
     try {
-      const results = await searchPlayersByName(search.trim(), new Date().getFullYear() - 1);
-      const player = results?.[0];
-      if (player?.id) {
-        navigate(`/player/${player.id}`);
+      const players = await searchPlayersByName(search, new Date().getFullYear() - 1);
+      if (!players || players.length === 0) {
+        return alert("Not found. Try again with full name");
+      } else if (players.length === 1) {
+        navigate(`/player/${players[0].id}`);
         return;
+      } else {
+        return alert("Multiple players matched. Please enter full first and last name");
       }
-      alert("Not found. Try again.");
     } catch {
       alert("Search failed. Try again.");
     }
   }
 
+  // Close when press Escape
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === "Escape" && isSearchOpen) closeSearchOverlay();
@@ -71,6 +103,27 @@ export default function PlayersPage() {
       setIsSearchClosing(false);
     }, 200);
   }
+
+
+  // ----------LOADING TOP PLAYERS----------
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setErr("");
+      try {
+        // << Pull the actual best 15 by season. FREE VERSION only allows for year 2021 -> 2023
+        const season = 2023;
+        const res = await getTopPlayersBySeason({ season, limit: 15, metric: "pts" }); // or "eff"
+        setPlayersPage(res || []);
+      } catch (e) {
+        console.error(e);
+        setErr(e?.message || "Failed to load players");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
 
   return (
     <div className={styles.body}>
@@ -110,7 +163,6 @@ export default function PlayersPage() {
               className={styles.playerCard}
               onClick={() => navigate(`/player/${player.id}`)}
             >
-              {/* If no headshot, show team logo or placeholder */}
               <img
                 src={player?.leagues?.standard?.team?.logo || "/placeholder-player.png"}
                 alt={player.firstname ? `${player.firstname} ${player.lastname}` : "Player"}
@@ -145,3 +197,4 @@ export default function PlayersPage() {
     </div>
   );
 }
+

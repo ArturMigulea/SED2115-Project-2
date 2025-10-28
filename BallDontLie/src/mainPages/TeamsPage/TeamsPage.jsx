@@ -13,6 +13,16 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
+  // API conference is often under leagues.standard.conference; also support flat conference just in case.
+  const east = useMemo(
+    () => teamsData.filter(t => (t?.leagues?.standard?.conference || t?.conference || "").toLowerCase() === "east"),
+    [teamsData]
+  );
+  const west = useMemo(
+    () => teamsData.filter(t => (t?.leagues?.standard?.conference || t?.conference || "").toLowerCase() === "west"),
+    [teamsData]
+  );
+
   // Call API client handler to get information
   useEffect(() => {
     (async () => {
@@ -29,31 +39,45 @@ export default function HomePage() {
     })();
   }, []);
 
-  // API conference is often under leagues.standard.conference; also support flat conference just in case.
-  const east = useMemo(
-    () => teamsData.filter(t => (t?.leagues?.standard?.conference || t?.conference || "").toLowerCase() === "east"),
-    [teamsData]
-  );
-  const west = useMemo(
-    () => teamsData.filter(t => (t?.leagues?.standard?.conference || t?.conference || "").toLowerCase() === "west"),
-    [teamsData]
-  );
+
 
   async function handleSearch() {
-    if (!search.trim()) return alert("Type NBA Player");
+    const query = search.trim().toLowerCase();
+    if (!query) return alert("Type NBA Player or Team");
+
+    // 1) Search Teams
+    const matchedTeams = teamsData.filter(t =>
+      (t.name?.toLowerCase().includes(query)) ||
+      (t.full_name?.toLowerCase().includes(query)) ||
+      (t.shortName?.toLowerCase() === query)
+
+    );
+
+    if (matchedTeams.length === 1) {
+      navigate(`/team/${matchedTeams[0].id}`);
+      return;
+    } else if (matchedTeams.length > 1) {
+      return alert("Multiple teams matched. Please enter full team name");
+    }
+
+    // 2) Search Players
     try {
-      const results = await searchPlayersByName(search.trim(), new Date().getFullYear() - 1);
-      const player = results?.[0];
-      if (player?.id) {
-        navigate(`/player/${player.id}`);
+      const players = await searchPlayersByName(search, new Date().getFullYear() - 1);
+      if (!players || players.length === 0) {
+        return alert("Not found. Try again with full name");
+      } else if (players.length === 1) {
+        navigate(`/player/${players[0].id}`);
         return;
+      } else {
+        return alert("Multiple players matched. Please enter full first and last name");
       }
-      alert("Not found. Try again.");
     } catch {
       alert("Search failed. Try again.");
     }
   }
 
+
+  // Close when press Escape
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === "Escape" && isSearchOpen) closeSearchOverlay();
@@ -76,7 +100,6 @@ export default function HomePage() {
       setIsSearchClosing(false);
     }, 200);
   }
-
   return (
     <div className={styles.body}>
       {/* Navbar */}

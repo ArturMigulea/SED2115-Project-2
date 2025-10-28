@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import styles from "./TeamTemplate.module.css";
 import { getTeamById, searchPlayersByName } from "../../api/nbaClient";
+import { teams as localTeams } from "../../data/teams";
 
 export default function TeamTemplate() {
   const { id } = useParams();
@@ -30,6 +31,32 @@ export default function TeamTemplate() {
       }
     })();
   }, [id]);
+
+  // Находим команду в локальной базе по сокращению (abbreviation)
+  // Находим команду в локальной базе
+  let localTeam = null;
+
+  if (team) {
+    const teamAbbr = team.abbreviation?.toLowerCase();
+    const teamFullName = team.full_name?.toLowerCase();
+    const teamName = team.name?.toLowerCase();
+
+    localTeam =
+      localTeams.find(t => t.abbreviation?.toLowerCase() === teamAbbr) ||
+      localTeams.find(t => t.full_name?.toLowerCase() === teamFullName) ||
+      localTeams.find(t => t.full_name?.toLowerCase() === teamName);
+  }
+
+
+
+  const city = localTeam?.city || "—";
+  const conference = localTeam?.conference || "—";
+  const division = localTeam?.division || "—";
+  const founded = localTeam?.founded || "—";
+  const arena = localTeam?.arena || "—";
+  const coach = localTeam?.coach || "—";
+  const owner = localTeam?.owner || "—";
+  const championships = localTeam?.championships ?? "—";
 
   async function handleSearch() {
     if (!search.trim()) return alert("Type NBA Player");
@@ -69,9 +96,6 @@ export default function TeamTemplate() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isSearchOpen, search]);
 
-  const city = team?.city || team?.name || "—";
-  const conference = team?.leagues?.standard?.conference || team?.conference || "—";
-  const division = team?.leagues?.standard?.division || team?.division || "—";
 
   return (
     <div className={styles.body}>
@@ -126,11 +150,12 @@ export default function TeamTemplate() {
               <tr><td>City:</td><td>{city}</td></tr>
               <tr><td>Conference:</td><td>{conference}</td></tr>
               <tr><td>Division:</td><td>{division}</td></tr>
-              <tr><td>Founded:</td><td>—</td></tr>
-              <tr><td>Arena:</td><td>—</td></tr>
-              <tr><td>Head Coach:</td><td>—</td></tr>
-              <tr><td>Owner:</td><td>—</td></tr>
-              <tr><td>Championships:</td><td>—</td></tr>
+              <tr><td>Founded:</td><td>{founded}</td></tr>
+              <tr><td>Arena:</td><td>{arena}</td></tr>
+              <tr><td>Head Coach:</td><td>{coach}</td></tr>
+              <tr><td>Owner:</td><td>{owner}</td></tr>
+              <tr><td>Championships:</td><td>{championships}</td></tr>
+
             </tbody>
           </table>
         </section>

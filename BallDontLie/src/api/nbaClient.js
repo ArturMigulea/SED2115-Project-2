@@ -1,4 +1,3 @@
-// Initialize the API call and set the header up
 const BASE_URL =
   import.meta.env.DEV ? "/nba" : "/api/nba";
 
@@ -159,14 +158,109 @@ async function mapLimit(items, limit, fn) {
 */
 
 // ---------- TEAMS ----------
-export async function getTeams({ conference, id } = {}) {
-  return api("/teams", { id, conference });
+export async function getTeams({ conference } = {}) {
+  const result = await api("/teams");
+
+  // Списки конференций
+  const eastCities = [
+    "Atlanta",
+    "Boston",
+    "Brooklyn",
+    "Charlotte",
+    "Chicago",
+    "Cleveland",
+    "Detroit",
+    "Indiana",
+    "Miami",
+    "Milwaukee",
+    "New York",
+    "Orlando",
+    "Philadelphia",
+    "Toronto",
+    "Washington",
+  ];
+
+  const westCities = [
+    "Dallas",
+    "Denver",
+    "Golden State",
+    "Houston",
+    "LA",
+    "Los Angeles",
+    "Memphis",
+    "Minnesota",
+    "New Orleans",
+    "Oklahoma City",
+    "Phoenix",
+    "Portland",
+    "Sacramento",
+    "San Antonio",
+    "Utah",
+  ];
+
+  //filter only real NBA teams
+  const nbaTeams = result.filter((team) => {
+    if (!team.city) return false;
+
+    const isNBA =
+      eastCities.includes(team.city) || westCities.includes(team.city);
+
+    if (!isNBA) return false;
+
+    //delete Utah Blue and Utah White
+    if (
+      team.city === "Utah" &&
+      !team.name.toLowerCase().includes("jazz")
+    ) {
+      return false;
+    }
+
+    // If conference is passed, filter by it
+    if (conference === "east") return eastCities.includes(team.city);
+    if (conference === "west") return westCities.includes(team.city);
+
+    return true;
+  });
+
+  //console.log("✅ Filtered NBA Teams:", nbaTeams.length, nbaTeams);
+
+  return nbaTeams;
 }
 
+
 export async function getTeamById(id) {
-  const data = await getTeams({ id });
-  return data?.[0] ?? null;
+  const teams = await getTeams();
+  const team = teams.find(t => Number(t.id) === Number(id));
+  return team ?? null;
 }
+
+// ---------- GAMES ----------
+export async function getUpcomingGames() {
+  const today = new Date().toISOString().split("T")[0];
+
+  const seasons = await api("/seasons");
+  const currentSeason = seasons[seasons.length - 1];
+
+
+  let games = await api("/games", {
+    season: currentSeason,
+    date: today,
+  });
+
+  if (!Array.isArray(games) || games.length === 0) {
+    console.warn("No games today — loading by season only");
+    games = await api("/games", { season: currentSeason });
+  }
+
+  console.log("games sample", games[0]);
+  return games.filter(g =>
+    g.league === "standard" ||
+    g.league?.name === "NBA"
+  );
+}
+
+
+
 
 // ---------- PLAYERS ----------
 export async function getPlayers({ season, team, id, search } = {}) {
