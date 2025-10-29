@@ -149,7 +149,7 @@ html, body {
 }
 
 .teamCard:hover{
-  background-color: #ffa334d7;
+  background-color: #fcc888d7;
   transform: scale(1.1);
 }
 

@@ -3,12 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
 import { getTeams, searchPlayersByName } from "../../api/nbaClient";
 import { getUpcomingGames } from "../../api/nbaClient";
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
+
 
 export default function HomePage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSearchClosing, setIsSearchClosing] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
 
   // ---------- TEAMS ----------
@@ -19,6 +23,26 @@ export default function HomePage() {
   // ---------- GAMES ----------
   const [upcomingGames, setUpcomingGames] = useState([]);
   const [loadingGames, setLoadingGames] = useState(false);
+
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date().toISOString().split("T")[0];
+    return today;
+  });
+
+  // Calendat open/close
+  const [showCalendar, setShowCalendar] = useState(false);
+
+  // close function calendar
+  function handleDateChange(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const formatted = `${year}-${month}-${day}`;
+
+    console.log("📅 Selected date (pure local):", formatted);
+    setSelectedDate(formatted);
+    setShowCalendar(false);
+  }
 
   // Random 10 cards (stable until teamsData changes)
   const topTeam = useMemo(() => {
@@ -49,19 +73,51 @@ export default function HomePage() {
 
   // ---------- Load Games ----------
   useEffect(() => {
-    (async () => {
+    let intervalId;
+
+    const fetchGames = async () => {
       setLoadingGames(true);
       try {
-        const games = await getUpcomingGames();
-        console.log("✅ Loaded games:", games);
+        const games = await getUpcomingGames(selectedDate);
         setUpcomingGames(games || []);
       } catch (err) {
         console.error("❌ Failed to load games:", err);
       } finally {
         setLoadingGames(false);
       }
-    })();
-  }, []);
+    };
+
+    fetchGames();
+    intervalId = setInterval(fetchGames, 10000); // updatre every 20sec
+
+    return () => clearInterval(intervalId);
+  }, [selectedDate]);
+
+
+  // 🔁Automatic score update every 15 seconds, only if there are LIVE matches
+  useEffect(() => {
+    const liveGames = upcomingGames.filter(g => {
+      const s = String(g.status?.short || "").toUpperCase();
+      const l = String(g.status?.long || "").toLowerCase();
+      return ["1Q", "2Q", "3Q", "4Q", "OT", "AOT", "LIVE"].includes(s) || l.includes("live") || l.includes("progress");
+    });
+    if (liveGames.length === 0) return;
+
+    const interval = setInterval(async () => {
+      try {
+        console.log("🔄 Refreshing live scores...");
+        const games = await getUpcomingGames(selectedDate);
+        setUpcomingGames(games || []);
+      } catch (err) {
+        console.error("❌ Live refresh failed:", err);
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [upcomingGames, selectedDate]);
+
+
+
 
 
   async function handleSearch() {
@@ -124,6 +180,28 @@ export default function HomePage() {
     }, 200);
   }
 
+  // Determinate the week around chosen day
+  function getWeekDays(dateStr) {
+    const date = new Date(`${dateStr}T12:00:00`);
+    const start = new Date(date);
+    const dayOfWeek = date.getDay(); // 0 (Sun) - 6 (Sat)
+    start.setDate(date.getDate() - dayOfWeek); 
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const formatted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+      return {
+        abbr: d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
+        num: d.getDate(),
+        dateStr: formatted,
+        isActive: formatted === dateStr,
+      };
+    });
+  }
+
+
   return (
     <div className={styles.body}>
       {/* Navbar */}
@@ -155,20 +233,65 @@ export default function HomePage() {
       <div className={styles.containers}>
         {/* Game/Search container */}
         <h1 className={styles.GamesTitle}>Latest games</h1>
+        {/* 🔹 Date and week selection container */}
+        <section className={styles.dateNavContainer}>
+          {/* The left part is the date and icon */}
+          <div className={styles.dateLeft} onClick={() => setShowCalendar(!showCalendar)}>
+            <img src="/NavBar_icon/calendar.svg" alt="calendar" className={styles.calendarIcon} />
+            {(() => {
+              const [year, month, day] = selectedDate.split("-");
+              const d = new Date(year, month - 1, day);
+              return d.toLocaleDateString("en-US", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              }).toUpperCase();
+            })()}
+          </div>
+
+          {/* The central part is the days of the week */}
+          <div className={styles.weekDays}>
+            {getWeekDays(selectedDate).map((day, idx) => (
+              <div
+                key={idx}
+                className={`${styles.weekDay} ${day.isActive ? styles.activeDay : ""}`}
+                onClick={() => setSelectedDate(day.dateStr)}
+              >
+                <div className={styles.dayAbbr}>{day.abbr}</div>
+                <div className={styles.dayNum}>{day.num}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Drop-down calendar */}
+          {showCalendar && (
+            <div className={styles.calendarDropdown}>
+              <Calendar
+                locale="en-US"
+                onChange={handleDateChange}
+                value={new Date(`${selectedDate}T12:00:00`)}
+                next2Label={null}
+                prev2Label={null}
+              />
+            </div>
+          )}
+        </section>
+
         <section className={styles.gameContainer}>
           <section className={styles.upcomingGames}>
             <div className={styles.gamesGrid}>
               {!loadingGames && upcomingGames.length > 0 ? (
-                upcomingGames.slice(0, 6).map((game, idx) => {
+                upcomingGames.map((game, idx) => {
                   const gameTime = new Date(game.date?.start);
                   // ---- Detect status using doc from  API-Sports ----
                   const shortStatus = String(game.status?.short || "").toUpperCase();
                   const longStatus = String(game.status?.long || "").toLowerCase();
+                  const clock = game.status?.clock || null;
 
-                  // Match on LIVE
                   const isLive =
-                    ["1Q", "2Q", "3Q", "4Q", "OT", "AOT"].includes(shortStatus) ||
-                    longStatus.includes("progress");
+                    longStatus.includes("in play") ||
+                    clock !== null;
+
 
                   // Match End
                   const isFinished =
@@ -202,10 +325,19 @@ export default function HomePage() {
                       <div className={styles.centerBlock}>
                         {/* Время вверху */}
                         <div className={styles.gameTimeTop}>
-                          {isFinished
-                            ? "Final"
-                            : gameTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {isLive ? (
+                            <div className={styles.liveIndicator}>
+                              <span className={styles.liveDot}></span>
+                              <span className={styles.liveText}>LIVE</span>
+                            </div>
+                          ) : isFinished ? (
+                            "Final"
+                          ) : (
+                            gameTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                          )}
                         </div>
+
+
 
                         {/* Score or VS */}
                         <div className={styles.vs}>
@@ -218,11 +350,19 @@ export default function HomePage() {
 
 
                         {/* Date on bottom */}
+                        {/* Date or clock info on bottom */}
                         <div className={styles.gameDateBottom}>
-                          {isLive
-                            ? "LIVE"
-                            : gameTime.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {isLive ? (
+                            <>
+                              Q{game.periods?.current || "?"} – {game.status?.clock || "--:--"}
+                            </>
+                          ) : isFinished ? (
+                            "Final"
+                          ) : (
+                            gameTime.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                          )}
                         </div>
+
                       </div>
 
                       {/* Right Team */}

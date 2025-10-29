@@ -161,7 +161,7 @@ async function mapLimit(items, limit, fn) {
 export async function getTeams({ conference } = {}) {
   const result = await api("/teams");
 
-  // Списки конференций
+  // List of Conference
   const eastCities = [
     "Atlanta",
     "Boston",
@@ -235,28 +235,59 @@ export async function getTeamById(id) {
 }
 
 // ---------- GAMES ----------
-export async function getUpcomingGames() {
-  const today = new Date().toISOString().split("T")[0];
+export async function getUpcomingGames(dateStr) {
+  //console.log("📅 Loading games for", dateStr);
+
+  const targetDate = dateStr; // пользовательская дата, без смещений
 
   const seasons = await api("/seasons");
   const currentSeason = seasons[seasons.length - 1];
 
-
-  let games = await api("/games", {
-    season: currentSeason,
-    date: today,
-  });
+  let games = await api("/games", { season: currentSeason });
 
   if (!Array.isArray(games) || games.length === 0) {
-    console.warn("No games today — loading by season only");
-    games = await api("/games", { season: currentSeason });
+    console.warn(`⚠️ No games found for ${targetDate}`);
+    return [];
   }
 
-  console.log("games sample", games[0]);
-  return games.filter(g =>
-    g.league === "standard" ||
-    g.league?.name === "NBA"
-  );
+  // ✅Filtering by local time, taking into account "night" matches
+  return games.filter(g => {
+    const leagueOk = g.league === "standard" || g.league?.name === "NBA";
+    if (!leagueOk) return false;
+    if (!g.date?.start) return false;
+
+    const startUTC = new Date(g.date.start);
+    const local = new Date(startUTC); //automatically converts to local time
+
+    let localY = local.getFullYear();
+    let localM = String(local.getMonth() + 1).padStart(2, "0");
+    let localD = String(local.getDate()).padStart(2, "0");
+
+    // If the match started at night (before 5:00), we'll assign it to the previous day
+    if (local.getHours() < 5) {
+      const prev = new Date(local);
+      prev.setDate(prev.getDate() - 1);
+      localY = prev.getFullYear();
+      localM = String(prev.getMonth() + 1).padStart(2, "0");
+      localD = String(prev.getDate()).padStart(2, "0");
+    }
+
+    const localStr = `${localY}-${localM}-${localD}`;
+
+    return localStr === targetDate;
+  });
+}
+
+
+
+
+export async function getGamesByDate(dateStr) {
+  const games = await api("/games", {
+    season: 2024,
+    date: dateStr, // YYYY-MM-DD
+  });
+
+  return games.filter(g => g.league?.name === "NBA");
 }
 
 
