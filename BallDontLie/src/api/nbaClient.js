@@ -1,6 +1,16 @@
+<<<<<<< Updated upstream
 const BASE_URL = import.meta.env.VITE_API_URL;
 const HEADERS = { Accept: "application/json" };
 
+=======
+const BASE_URL = await fetch("/nba/teams?season=2024"); // goes to the Netlify Function in prod
+
+// const BASE_URL = import.meta.env.DEV ? "/nba" : "/api/nba";
+
+// const HEADERS = {
+//   Accept: "application/json",
+// };
+>>>>>>> Stashed changes
 
 // Saves data so app lessens the request limiters per minute
 // ChatGPT suggestion
