@@ -1,10 +1,6 @@
-// Initialize the API call and set the header up
-const BASE_URL =
-  import.meta.env.DEV ? "/nba" : "/api/nba";
+const BASE_URL = import.meta.env.VITE_API_URL;
+const HEADERS = { Accept: "application/json" };
 
-const HEADERS = {
-  Accept: "application/json",
-};
 
 // Saves data so app lessens the request limiters per minute
 // ChatGPT suggestion
