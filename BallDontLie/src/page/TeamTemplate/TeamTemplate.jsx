@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { teams } from "../../data/teams.js";
 import styles from "./TeamTemplate.module.css";
+import { getTeamById, searchPlayersByName } from "../../api/nbaClient";
+import { teams as localTeams } from "../../data/teams";
 
 export default function TeamTemplate() {
   const { id } = useParams();
@@ -11,20 +12,65 @@ export default function TeamTemplate() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSearchClosing, setIsSearchClosing] = useState(false);
 
-  const team = teams.find(t => t.id === Number(id));
+  const [team, setTeam] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
-  function handleSearch() {
+  // Call API client handler to get information
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setErr("");
+      try {
+        const t = await getTeamById(Number(id));
+        setTeam(t || null);
+      } catch (e) {
+        setErr(e?.message || "Failed to load team");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
+
+  // Находим команду в локальной базе по сокращению (abbreviation)
+  // Находим команду в локальной базе
+  let localTeam = null;
+
+  if (team) {
+    const teamAbbr = team.abbreviation?.toLowerCase();
+    const teamFullName = team.full_name?.toLowerCase();
+    const teamName = team.name?.toLowerCase();
+
+    localTeam =
+      localTeams.find(t => t.abbreviation?.toLowerCase() === teamAbbr) ||
+      localTeams.find(t => t.full_name?.toLowerCase() === teamFullName) ||
+      localTeams.find(t => t.full_name?.toLowerCase() === teamName);
+  }
+
+
+
+  const city = localTeam?.city || "—";
+  const conference = localTeam?.conference || "—";
+  const division = localTeam?.division || "—";
+  const founded = localTeam?.founded || "—";
+  const arena = localTeam?.arena || "—";
+  const coach = localTeam?.coach || "—";
+  const owner = localTeam?.owner || "—";
+  const championships = localTeam?.championships ?? "—";
+
+  async function handleSearch() {
     if (!search.trim()) return alert("Type NBA Player");
-
-    const term = search.toLowerCase();
-    const player = players.find(p => p.name.toLowerCase().includes(term));
-
-    if (player) {
-      navigate(`/player/${player.id}`);
-      return;
+    try {
+      const results = await searchPlayersByName(search.trim(), new Date().getFullYear() - 1);
+      const player = results?.[0];
+      if (player?.id) {
+        navigate(`/player/${player.id}`);
+        return;
+      }
+      alert("Not found. Try again.");
+    } catch {
+      alert("Search failed. Try again.");
     }
-
-    alert("Not found. Try again.");
   }
 
   function closeSearchOverlay() {
@@ -41,14 +87,15 @@ export default function TeamTemplate() {
     }
   }
 
-  // Close overlay on Escape
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === "Escape" && isSearchOpen) closeSearchOverlay();
+      if (e.key === "Enter" && isSearchOpen) handleSearch();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isSearchOpen]);
+  }, [isSearchOpen, search]);
+
 
   return (
     <div className={styles.body}>
@@ -83,52 +130,54 @@ export default function TeamTemplate() {
             <tbody>
               <tr>
                 <td colSpan="2" className={styles.teamName}>
-                  {team.full_name}
+                  {loading ? "Loading…" : (team?.name || team?.full_name || "Team")}
                 </td>
               </tr>
 
               <tr>
                 <td colSpan="2" className={styles.teamPhotoCell}>
-                  <img src={team.logo} className={styles.teamPhoto} alt={team.name} />
+                  {err && <p>{err}</p>}
+                  {!err && (
+                    <img
+                      src={team?.logo || "/placeholder-team.png"}
+                      className={styles.teamPhoto}
+                      alt={team?.name || "Team"}
+                    />
+                  )}
                 </td>
               </tr>
 
-              <tr><td>City:</td><td>{team.city}</td></tr>
-              <tr><td>Conference:</td><td>{team.conference}</td></tr>
-              <tr><td>Division:</td><td>{team.division}</td></tr>
-              <tr><td>Founded:</td><td>{team.founded}</td></tr>
-              <tr><td>Arena:</td><td>{team.arena}</td></tr>
-              <tr><td>Head Coach:</td><td>{team.coach}</td></tr>
-              <tr><td>Owner:</td><td>{team.owner}</td></tr>
-              <tr><td>Championships:</td><td>{team.championships}</td></tr>
+              <tr><td>City:</td><td>{city}</td></tr>
+              <tr><td>Conference:</td><td>{conference}</td></tr>
+              <tr><td>Division:</td><td>{division}</td></tr>
+              <tr><td>Founded:</td><td>{founded}</td></tr>
+              <tr><td>Arena:</td><td>{arena}</td></tr>
+              <tr><td>Head Coach:</td><td>{coach}</td></tr>
+              <tr><td>Owner:</td><td>{owner}</td></tr>
+              <tr><td>Championships:</td><td>{championships}</td></tr>
+
             </tbody>
           </table>
         </section>
-
       </div>
 
-
-
-
-      {/* Search overlay */}
-      {
-        (isSearchOpen || isSearchClosing) && (
-          <div
-            className={`${styles.overlay} ${isSearchClosing ? styles.close : ""}`}
-            onClick={handleOverlayClick}
-          >
-            <div className={`${styles.searchBox} ${isSearchClosing ? styles.close : ""}`}>
-              <input
-                type="text"
-                placeholder="Search player..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                autoFocus
-              />
-            </div>
+      {(isSearchOpen || isSearchClosing) && (
+        <div
+          className={`${styles.overlay} ${isSearchClosing ? styles.close : ""}`}
+          onClick={handleOverlayClick}
+        >
+          <div className={`${styles.searchBox} ${isSearchClosing ? styles.close : ""}`}>
+            <input
+              type="text"
+              placeholder="Search player..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoFocus
+              onKeyDown={e => e.key === "Enter" && handleSearch()}
+            />
           </div>
-        )
-      }
-    </div >
+        </div>
+      )}
+    </div>
   );
 }

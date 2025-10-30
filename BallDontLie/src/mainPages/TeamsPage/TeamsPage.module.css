@@ -145,10 +145,11 @@ html, body {
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   cursor: pointer;
   transition: background-color 0.3s ease, transform 0.3s ease;
+  margin-bottom: 20px;
 }
 
 .teamCard:hover{
-  background-color: #ffa334d7;
+  background-color: #fcc888d7;
   transform: scale(1.1);
 }
 
